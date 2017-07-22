@@ -1,0 +1,318 @@
+#!/usr/bin/python
+import os
+import sys
+# At this point we may be running as root or as another user
+# - Check the parameters are valid - show an error if not
+# - Show the help message if requested
+# Don't do any work or anything time-consuming here as it will run twice
+
+if os.geteuid() != 0:
+    # os.execvp() replaces the running process, rather than launching a child
+    # process, so there's no need to exit afterwards. The extra "sudo" in the
+    # second parameter is required because Python doesn't automatically set $0
+    # in the new process.
+    os.execvp("sudo", ["sudo"] + sys.argv)
+
+# Now we are definitely running as root
+# - Make the changes to the system settings (e.g. Apache config)
+Remember the above changes to run as root
+
+# General imports
+import re
+
+# Application Imports
+import FindnFix
+from FindnFix import OSTools
+from FindnFix import XMLTools
+from FindnFix import JavaTools
+
+
+class Section_01:
+    def __init__(self, runtypes, environments):
+        self.runtypes = runtypes
+        self.environments = environments
+
+    def chk_01(self):
+        check_for_dirs = ['js-examples',
+                            'servlet-example',
+                            'webdav',
+                            'tomcat-docs',
+                            'balancer',
+                            'admin',
+                            'examples',
+                            'host-manager',
+                            'manager'
+                          ]
+        check_for_files = ['host-manager.xml',
+                           'manager.xml']
+
+        def chk(self):
+            exclude = ['WEB-INF']
+            toDelDirs = FindnFix.OSTools.dirs(self.environments, check_for_dirs, exclude)
+            print(toDelDirs)
+            exclude = ['webapps']
+            toDelFiles = FindnFix.OSTools.files(self.environments, check_for_files, exclude)
+            print(toDelFiles)
+
+        def doc(self):
+            print("Specific default applications are concidered unsafe and should be removed. Remove any relevant configuration files at the same time")
+
+        runs = {'CHK' : chk,
+                'DOC' : doc}
+
+        for run in self.runtypes:
+            runs[run](self)
+
+    def chk_02(self):
+        def doc(self):
+            print(
+                "The default installation of Tomcat includes connectors with default settings. These are traditionally set up for convenience. It is best to remove these connectors and enable only what is needed.")
+
+        def chk(self):
+            search = FindnFix.OSTools.files(self.environments, ['server.xml'])
+            for env, fl, dir in search:
+                tags = FindnFix.XMLTools.findElements(dir + '/' + fl, './/Connector')
+                print('File: {0}/{1}'.format(dir, fl))
+                if len(tags) < 1:
+                    print('WARN: This service isnt listening on a port')
+                elif len(tags) > 1:
+                    print('WARN: This service is listening on more than 1 port. If possible disable unused ports')
+                else:
+                    print('PASSED: This service has only 1 port')
+                print(tags)
+                print('      ...')
+                for tag in tags:
+                    print('      ...')
+                    print(tag)
+                    print('   {0}'.format(FindnFix.XMLTools.etToString(tag)))
+                    print('      ...')
+                print('      ...')
+
+
+        runs = {'CHK': chk,
+                'DOC': doc}
+
+        for run in self.runtypes:
+            runs[run](self)
+
+
+class Section_02:
+    def __init__(self, runtypes, environments):
+        self.runtypes = runtypes
+        self.environments = environments
+
+    def chk_01(self):
+        def doc(self):
+            print('Description: \
+The server.info attribute contains the name of the application service. This value is \
+presented to Tomcat clients when clients connect to the tomcat server. \
+Rationale: \
+Altering the server.info attribute may make it harder for attackers to determine which \
+vulnerabilities affect the server platform.')
+
+        def chk(self):
+            search = FindnFix.OSTools.files(self.environments, ['catalina.jar'])
+            for env, fl, dir in search:
+                print('Checking: {0}/{1}'.format(dir,fl))
+                strFile = FindnFix.JavaTools.readFile(dir + '/' + fl, "org/apache/catalina/util/ServerInfo.properties")
+                regex = "server.info.*?(?=\w)(.*)\r"
+                value = re.findall(regex, strFile)
+                if re.findall('Tomcat', value[0]):
+                    print('The server should not identify it self a with "{0}".  This needs to change.'.format(value[0]))
+                else:
+                    print('The server identifies as "{0}".  This is OK.'.format(value[0]))
+
+        runs = {'CHK': chk,
+                'DOC': doc}
+
+        for run in self.runtypes:
+            runs[run](self)
+
+    def chk_02(self):
+        def doc(self):
+            print('Description:\n\
+The server.number attribute represents the specific version of Tomcat that is executing.\n\
+This value is presented to Tomcat clients when connect.\n\
+Rationale:\n\
+Advertising a valid server version may provide attackers with information useful for\n\
+locating vulnerabilities that affect the server platform. Altering the server version string\n\
+may make it harder for attackers to determine which vulnerabilities affect the server\n\
+platform.')
+
+        def chk(self):
+            search = FindnFix.OSTools.files(self.environments, ['catalina.jar'])
+            for env, fl, dir in search:
+                print('Checking: {0}/{1}'.format(dir,fl))
+                strFile = FindnFix.JavaTools.readFile(dir + '/' + fl, "org/apache/catalina/util/ServerInfo.properties")
+                regex = "server.number.*?(?=\w)(.*)\r"
+                value = re.findall(regex, strFile)
+                if len(value[0]):
+                    print('The server should not identify it self a with "{0}".  This needs to change.'.format(value[0]))
+                else:
+                    print('The server identifies as "{0}".  This is OK.'.format(value[0]))
+
+        runs = {'CHK': chk,
+                'DOC': doc}
+
+        for run in self.runtypes:
+            runs[run](self)
+
+    def chk_03(self):
+        def doc(self):
+            print('Description:\n\
+The server.built date represents the date which Tomcat was compiled and packaged. This\n\
+value is presented to Tomcat clients when clients connect to the server.\n\
+Rationale:\n\
+Altering the server.built string may make it harder for attackers to fingerprint which\n\
+vulnerabilities affect the server platform.')
+
+        def chk(self):
+            search = FindnFix.OSTools.files(self.environments, ['catalina.jar'])
+            for env, fl, dir in search:
+                print('Checking: {0}/{1}'.format(dir,fl))
+                strFile = FindnFix.JavaTools.readFile(dir + '/' + fl, "org/apache/catalina/util/ServerInfo.properties")
+                regex = "server.built.*?(?=\w)(.*)"
+                value = re.findall(regex, strFile)
+                if len(value[0]):
+                    print('The server should not identify it self a with "{0}".  This needs to change.'.format(value[0]))
+                else:
+                    print('The server identifies as "{0}".  This is OK.'.format(value[0]))
+
+        runs = {'CHK': chk,
+                'DOC': doc}
+
+        for run in self.runtypes:
+            runs[run](self)
+
+
+    def chk_04(self):
+        def doc(self):
+            print('Description:\n\
+The xpoweredBy setting determines if Apache Tomcat will advertise its presence via the\n\
+XPowered-By HTTP header. It is recommended that this value be set to false. The server\n\
+attribute overrides the default value that is sent down in the HTTP header further masking\n\
+Apache Tomcat.\n\
+Rationale:\n\
+Preventing Tomcat from advertising its presence in this manner may make it harder for\n\
+attackers to determine which vulnerabilities affect the server platform.')
+
+        def chk(self):
+            search = FindnFix.OSTools.files(self.environments, ['server.xml'])
+            for env, fl, dir in search:
+                print('Checking: {0}/{1}'.format(dir, fl))
+                attributes = FindnFix.XMLTools.findAttributes('{0}/{1}'.format(dir, fl), '//Connector', 'xpoweredBy')
+                for (val, el) in attributes:
+                    if len(val) and val[0] == 'false':
+                        print('PASSED: The following connector explicitly sets "xpoweredBy" to false\n{0}'.format(FindnFix.XMLTools.etToString(el)))
+                    else:
+                        print('FAILED: The following connector doesn\'t explicitly sets "xpoweredBy" to false\n{0}'.format(FindnFix.XMLTools.etToString(el)))
+
+        runs = {'CHK': chk,
+                'DOC': doc}
+
+        for run in self.runtypes:
+            runs[run](self)
+
+    def chk_05(self):
+        def doc(self):
+            print('Description:\n\
+When a runtime error occurs during request processing, Apache Tomcat will display\n\
+debugging information to the requestor. It is recommended that such debug information be\n\
+withheld from the requestor.\n\
+Rationale:\n\
+Debugging information, such as that found in call stacks, often contains sensitive\n\
+information that may useful to an attacker. By preventing Tomcat from providing this\n\
+information, the risk of leaking sensitive information to a potential attacker is reduced.')
+
+        def chk(self):
+            #search = FindnFix.OSTools.files(self.environments, ['web.xml'])
+            #for env, fl, dir in search:
+                dir = '/opt/tomcat-inst02/webapps/manager/WEB-INF'
+                fl = 'web.xml'
+                #dir = '/opt/tomcat/conf'
+                #fl = 'server.xml'
+                print('#-------------------')
+                print('#Checking: {0}/{1}'.format(dir, fl))
+                FindnFix.XMLTools.printXmlNoComment('{0}/{1}'.format(dir, fl))
+                elements = FindnFix.XMLTools.findSubElements('{0}/{1}'.format(dir, fl), './/d:error-page', './/exception-type')
+                print elements
+
+
+                #break
+
+        runs = {'CHK': chk,
+                'DOC': doc}
+
+        for run in self.runtypes:
+            runs[run](self)
+
+
+
+
+#########
+class Section_XX:
+    def __init__(self, runtypes, environments):
+        self.runtypes = runtypes
+        self.environments = environments
+#--------
+    def chk_XX(self):
+        def doc(self):
+            print('')
+
+        def chk(self):
+            pass
+
+        runs = {'CHK': chk,
+                'DOC': doc}
+
+        for run in self.runtypes:
+            runs[run](self)
+
+
+
+#################################################################
+## Required environment settings
+
+# Installed tomcat binaries
+CATALINA_HOMES = [('home_01','/opt/tomcat')]
+# Location of web instances
+CATALINA_BASES = [('inst_01','/opt/tomcat-inst01'), ('inst_02','/opt/tomcat-inst02')]
+
+# DOC, CHK, FIX
+runtypes = ['DOC','CHK']
+#runtypes = ['DOC']
+
+# TODO
+#if not os.geteuid() == 0:
+#    sys.exit("\nOnly root can run this script\n")
+
+environments = CATALINA_HOMES + CATALINA_BASES
+
+section01 = Section_01(runtypes, environments)
+print('### Section 01.01 #######################')
+section01.chk_01()
+print('### Section 01.02 #######################')
+section01.chk_02()
+
+section02 = Section_02(runtypes, environments)
+print('### Section 02.01 #######################')
+section02.chk_01()
+print('### Section 02.02 #######################')
+section02.chk_02()
+print('### Section 02.03 #######################')
+section02.chk_03()
+print('### Section 02.04 #######################')
+section02.chk_04()
+print('### Section 02.05 #######################')
+section02.chk_05()
+
+
+
+
+
+
+
+
+
+
+
